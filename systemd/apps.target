@@ -1,0 +1,17 @@
+# Collective handle for all seven application services.
+#
+#   systemctl status apps.target   — overview
+#   systemctl stop   apps.target   — stop everything (PartOf= in each unit)
+#   systemctl start  apps.target   — bring everything back
+#
+# Each service declares WantedBy=apps.target, so `systemctl enable <app>`
+# wires it in here automatically.
+
+[Unit]
+Description=Consolidated web applications
+After=network-online.target postgresql.service
+Wants=network-online.target
+RequiresMountsFor=/data
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,92 @@
+[Unit]
+Description=flask-3 (gunicorn)
+Documentation=file:///data/apps/flask-3/README
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+# /data is a separate disk. Without this, a failed or slow mount lets the
+# unit start against an empty directory on the root filesystem — it would
+# fail confusingly, or worse, write there and diverge from the real data.
+RequiresMountsFor=/data
+PartOf=apps.target
+
+[Service]
+Type=notify
+User=flask3
+Group=flask3
+WorkingDirectory=/data/apps/flask-3/current
+
+# Secrets and DATABASE_URL. Mode 0600, owned by flask3.
+# Lives outside releases/ so deploys never touch it and rollbacks never
+# revert it.
+EnvironmentFile=/data/apps/flask-3/shared/env
+
+# This single line is the entire path-prefix mechanism. Gunicorn copies
+# SCRIPT_NAME into the WSGI environ; url_for() then generates /flask-3/...
+Environment=SCRIPT_NAME=/flask-3
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+
+# systemd creates /run/flask-3 owned by this user at start and removes it
+# at stop. No stale sockets, no tmpfiles.d rule to maintain.
+RuntimeDirectory=flask-3
+RuntimeDirectoryMode=0750
+
+ExecStart=/data/apps/flask-3/current/venv/bin/gunicorn \
+    --workers 4 \
+    --bind unix:/run/flask-3/gunicorn.sock \
+    --umask 007 \
+    --timeout 60 \
+    --graceful-timeout 30 \
+    --access-logfile - \
+    --error-logfile - \
+    wsgi:app
+
+# HUP cycles workers without dropping the listening socket, so
+# `systemctl reload` applies a deploy with no visible interruption.
+ExecReload=/bin/kill -s HUP $MAINPID
+
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+# ---- sandboxing (verify with: systemd-analyze security flask-3.service)
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# ProtectSystem=strict makes the whole filesystem read-only except
+# /run/flask-3 and /tmp. If the application genuinely needs a writable
+# path, add it here rather than weakening ProtectSystem:
+# ReadWritePaths=/data/apps/flask-3/shared/data
+
+# ---- resource ceilings
+# Nine applications on one host is fine. Nine unbounded applications is one
+# memory leak away from taking the host down. Tune from systemd-cgtop.
+MemoryMax=768M
+MemoryHigh=640M
+CPUQuota=100%
+TasksMax=256
+LimitNOFILE=8192
+
+[Install]
+WantedBy=apps.target

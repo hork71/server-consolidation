@@ -1,0 +1,150 @@
+1. Scope en inventory
+
+
+ID	Type	From	Path prefix	Listener
+static-a	HTML + JavaScript	Server 2	/static-a/	nginx, direct from disk
+static-b	HTML + JavaScript	Server 2	/static-b/	nginx, direct from disk
+node-1	Node.js	Server 1	/node-1/	127.0.0.1:8001
+node-2	Node.js	Server 2	/node-2/	127.0.0.1:8002
+flask-1	Python + Flask	Server 1	/flask-1/	/run/flask-1/gunicorn.sock
+flask-2	Python + Flask	Server 2	/flask-2/	/run/flask-2/gunicorn.sock
+flask-3	Python + Flask	Server 2	/flask-3/	/run/flask-3/gunicorn.sock
+flask-4	Python + Flask, Redis cache	Server 2	/flask-4/	/run/flask-4/gunicorn.sock
+rails	Ruby on Rails	Server 2	/rails/	/run/rails/puma.sock
+
+Gunicorn en Puma ondersteunen beide native Unix-sockets, dus die zes applicaties gebruiken ze: geen poort om toe te wijzen, niets dat per ongeluk vanuit het netwerk kan worden gebonden en toegang die wordt geregeld door bestandsysteemrechten. De twee Node-applicaties gebruiken loopback TCP, omdat socketondersteuning in Node-webframeworks meer varieert en het voordeel niet opweegt tegen het tegenwerken van de applicatie.
+
+Eigenschappen die het ontwerp bepalen
+Geen door gebruikers geüploade bestanden. Alle permanente statusinformatie bevindt zich in PostgreSQL, waardoor elke applicatie stateless is. Backups beperken zich tot een database-dump plus configuratie.
+
+Geen achtergrondprocessen. Geen Sidekiq, Celery of cron-gestuurde taken – elke applicatie is een afzonderlijk webproces, waardoor elke applicatie exact één unit-bestand wordt.
+
+Geen WebSockets. Overal wordt gebruikgemaakt van een eenvoudige HTTP-proxy.
+
+Geen uitgaand internetverkeer. De host bevindt zich op een geïsoleerd lokaal netwerk. Deze beperking bepaalt de build-pipeline meer dan welke andere ook.
+
+Eén hostnaam. Geen wildcard DNS, waardoor alle negen applicaties dezelfde oorsprong delen en gescheiden zijn door paden.
+
+2. Doel architectuur
+
+Nginx is het enige proces dat aan een openbare poort is gebonden. Elke applicatie draait als een eigen systemd-service onder een eigen gebruiker zonder speciale rechten, die alleen bereikbaar is via een Unix-socket of loopback. PostgreSQL en Redis draaien er native naast.
+
+                      LAN
+                       │
+                    :443 (TLS)
+                       │
+        ┌──────────────▼──────────────┐
+        │           nginx             │   TLS · routing · static files
+        └──┬───────────────────────┬──┘
+           │                       │
+   files from disk        unix sockets / loopback
+           │                       │
+  ┌────────▼────────┐    ┌─────────▼─────────────────────────────┐
+  │ /srv/www/       │    │  systemd  (apps.target)               │
+  │   static-a/     │    │  flask-1..4.service   gunicorn, sock  │
+  │   static-b/     │    │  rails.service        puma, sock      │
+  │   landing/      │    │  node-1.service       :8001           │
+  └─────────────────┘    │  node-2.service       :8002           │
+                         └───────────┬────────────────┬──────────┘
+                                     │ loopback       │
+                        ┌────────────▼──────┐  ┌──────▼────────┐
+                        │ PostgreSQL 16     │  │ redis (cache) │
+                        │ postgresql.service│  │ redis.service │
+                        └───────────────────┘  └───────────────┘
+
+  elke eenheid: eigen systeemgebruiker · eigen socketdirectory · gesandboxd · MemoryMax
+
+3. Routering en padvoorvoegsels
+
+Met één hostnaam en zonder wildcard-DNS worden applicaties gescheiden door een padvoorvoegsel in plaats van door een subdomein.
+
+3.1 The proxy_pass regel
+
+nginx configuratie
+
+/etc/nginx/snippets/proxy_common.conf
+
+proxy_http_version 1.1;
+proxy_set_header Host              $host;
+proxy_set_header X-Real-IP         $remote_addr;
+proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_connect_timeout 5s;
+proxy_send_timeout    60s;
+proxy_read_timeout    60s;
+
+/etc/nginx/sites-available/servername.conf
+
+server {
+    listen 80;
+    server_name servername.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name servername.example.com;
+
+    ssl_certificate     /etc/ssl/certs/servername.fullchain.pem;
+    ssl_certificate_key /etc/ssl/private/servername.key;
+    include snippets/tls_common.conf;
+
+    root  /srv/www/landing;
+    index index.html;
+    client_max_body_size 25m;
+
+    access_log /var/log/nginx/servername.access.log;
+    error_log  /var/log/nginx/servername.error.log;
+
+    # --- static applications, served from disk ---
+    location /static-a/ {
+        alias /srv/www/static-a/;
+        try_files $uri $uri/ /static-a/index.html;
+    }
+    location /static-b/ {
+        alias /srv/www/static-b/;
+        try_files $uri $uri/ /static-b/index.html;
+    }
+
+    # --- Flask, over unix sockets ---
+    location /flask-1/ {
+        proxy_pass http://unix:/run/flask-1/gunicorn.sock:;
+        proxy_set_header X-Forwarded-Prefix /flask-1;
+        include snippets/proxy_common.conf;
+    }
+    # flask-2, flask-3, flask-4 follow the same shape
+
+    # --- Node, over loopback ---
+    location /node-1/ {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_set_header X-Forwarded-Prefix /node-1;
+        include snippets/proxy_common.conf;
+    }
+    # node-2 on :8002
+
+    # --- Rails: assets straight from disk, rest to Puma ---
+    location /rails/assets/ {
+        alias /srv/apps/rails/current/public/assets/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+    location /rails/ {
+        proxy_pass http://unix:/run/rails/puma.sock:;
+        proxy_set_header X-Forwarded-Prefix /rails;
+        include snippets/proxy_common.conf;
+    }
+}
+
+/etc/nginx/snippets/tls_common.conf
+
+ssl_protocols             TLSv1.2 TLSv1.3;
+ssl_prefer_server_ciphers off;
+ssl_session_cache         shared:SSL:10m;
+ssl_session_timeout       1d;
+ssl_session_tickets       off;
+
+add_header X-Content-Type-Options nosniff                   always;
+add_header X-Frame-Options        SAMEORIGIN                always;
+add_header Referrer-Policy        strict-origin-when-cross-origin always;

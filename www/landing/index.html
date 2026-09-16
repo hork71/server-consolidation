@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>servername.example.com</title>
+<!--
+  Deliberately self-contained: no external stylesheet, font, script or image.
+  This host has no outbound internet, and an external reference would not fail
+  cleanly here — it would hang until timeout and render the page half-broken.
+  Keep it that way when editing.
+-->
+<style>
+  :root {
+    --bg: #f6f7f6; --card: #fff; --ink: #1a1f1d; --mid: #5a635f;
+    --rule: #dde2e0; --accent: #0f6e63;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121614; --card: #191f1d; --ink: #e7edea; --mid: #97a19d;
+      --rule: #2b3532; --accent: #56c3b3;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 3rem 1.5rem 5rem; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; letter-spacing: -.02em; margin: 0 0 .35rem; }
+  .host {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .85rem; color: var(--mid); margin: 0 0 2.5rem;
+  }
+  h2 {
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--mid); font-weight: 600; margin: 2.25rem 0 .75rem;
+  }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+  a.app {
+    display: flex; align-items: baseline; gap: .9rem; text-decoration: none;
+    background: var(--card); border: 1px solid var(--rule); border-radius: 4px;
+    padding: .8rem 1rem; color: var(--ink);
+  }
+  a.app:hover, a.app:focus-visible { border-color: var(--accent); outline: none; }
+  a.app:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+  .name { font-weight: 600; }
+  .path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .8rem; color: var(--mid); margin-left: auto;
+  }
+  footer {
+    margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--rule);
+    font-size: .8rem; color: var(--mid);
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Applications</h1>
+  <p class="host">servername.example.com</p>
+
+  <!-- Replace the display names below with the real application names. -->
+
+  <h2>Static</h2>
+  <ul>
+    <li><a class="app" href="/static-a/"><span class="name">static-a</span><span class="path">/static-a/</span></a></li>
+    <li><a class="app" href="/static-b/"><span class="name">static-b</span><span class="path">/static-b/</span></a></li>
+  </ul>
+
+  <h2>Python</h2>
+  <ul>
+    <li><a class="app" href="/flask-1/"><span class="name">flask-1</span><span class="path">/flask-1/</span></a></li>
+    <li><a class="app" href="/flask-2/"><span class="name">flask-2</span><span class="path">/flask-2/</span></a></li>
+    <li><a class="app" href="/flask-3/"><span class="name">flask-3</span><span class="path">/flask-3/</span></a></li>
+    <li><a class="app" href="/flask-4/"><span class="name">flask-4</span><span class="path">/flask-4/</span></a></li>
+  </ul>
+
+  <h2>Node.js</h2>
+  <ul>
+    <li><a class="app" href="/node-1/"><span class="name">node-1</span><span class="path">/node-1/</span></a></li>
+    <li><a class="app" href="/node-2/"><span class="name">node-2</span><span class="path">/node-2/</span></a></li>
+  </ul>
+
+  <h2>Ruby</h2>
+  <ul>
+    <li><a class="app" href="/rails/"><span class="name">rails</span><span class="path">/rails/</span></a></li>
+  </ul>
+
+  <footer>Consolidated application server &middot; internal use</footer>
+</main>
+</body>
+</html>

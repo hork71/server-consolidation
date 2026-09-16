@@ -1,0 +1,84 @@
+[Unit]
+Description=rails (puma)
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+# /data is a separate disk. Without this, a failed or slow mount lets the
+# unit start against an empty directory on the root filesystem — it would
+# fail confusingly, or worse, write there and diverge from the real data.
+RequiresMountsFor=/data
+PartOf=apps.target
+
+[Service]
+# Puma does not implement sd_notify without an extra plugin, so Type=simple.
+# If you add puma-plugin-systemd later, switch to Type=notify.
+Type=simple
+User=rails
+Group=rails
+WorkingDirectory=/data/apps/rails/current
+
+# SECRET_KEY_BASE and DATABASE_URL. Carry SECRET_KEY_BASE over from the old
+# server unchanged — a new value invalidates every existing session cookie.
+EnvironmentFile=/data/apps/rails/shared/env
+
+Environment=RAILS_ENV=production
+# Path-prefix mechanism. Must match config.relative_url_root in the app,
+# which already works in the current environment — carry it over verbatim.
+Environment=RAILS_RELATIVE_URL_ROOT=/rails
+# nginx serves /rails/assets/ from disk, so Rails must not also try to.
+Environment=RAILS_SERVE_STATIC_FILES=false
+Environment=RAILS_LOG_TO_STDOUT=1
+Environment=BUNDLE_GEMFILE=/data/apps/rails/current/Gemfile
+Environment=MALLOC_ARENA_MAX=2
+
+RuntimeDirectory=rails
+RuntimeDirectoryMode=0750
+
+# umask=0007 puts the socket in group rails, which www-data belongs to.
+ExecStart=/usr/bin/bundle exec puma \
+    -b "unix:///run/rails/puma.sock?umask=0007" \
+    -e production \
+    -t 5:16
+
+ExecReload=/bin/kill -s USR1 $MAINPID
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+# ---- sandboxing (verify with: systemd-analyze security rails.service)
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Rails insists on writable tmp/ and log/. The deploy script symlinks both
+# from the release into shared/, so exactly one path needs to be writable.
+# MemoryDenyWriteExecute is omitted: some Ruby native extensions need W+X.
+ReadWritePaths=/data/apps/rails/shared
+
+# ---- resource ceilings
+MemoryMax=1500M
+MemoryHigh=1280M
+CPUQuota=150%
+TasksMax=256
+LimitNOFILE=8192
+
+[Install]
+WantedBy=apps.target

@@ -1,0 +1,33 @@
+# Nothing generated on the target host belongs in this repository.
+
+# Secrets. provision-databases.sh writes DATABASE_URL into these on the host;
+# they exist at /data/apps/<app>/shared/env, mode 0600, and must never be
+# copied here.
+env
+*.env
+shared/env
+
+# TLS private keys and certificates.
+*.key
+*.pem
+*.csr
+*.crt
+
+# Database dumps and backups.
+*.dump
+*.sql.gz
+backups/
+
+# Release tarballs and offline dependency bundles. These are archived
+# alongside the release on the build machine, not in version control.
+*.tar.gz
+wheelhouse/
+node_modules/
+vendor/cache/
+venv/
+.bundle/
+
+# Editor and OS noise.
+.DS_Store
+*.swp
+*~

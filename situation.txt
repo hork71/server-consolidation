@@ -1,0 +1,20 @@
+Current situation:
+
+  - Server1
+    * nodejs application
+    * python+flask application
+  
+  - Server 2
+    * html+javascript application
+    * ruby on rails application
+    * html+javascript application
+    * nodejs application
+    * python+flask application
+    * python+flask application
+    * python+flask application
+
+Desired situation:
+
+  - consolidate the above 8 applications on a new dedicated ubuntu 24 server
+  - use nginx
+

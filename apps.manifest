@@ -1,0 +1,13 @@
+# Application manifest. Single source of truth for the provisioning scripts.
+#
+#  id        type    prefix       listener                        user
+# ----------------------------------------------------------------------
+static-a     static  /static-a/   -                               -
+static-b     static  /static-b/   -                               -
+flask-1      flask   /flask-1/    /run/flask-1/gunicorn.sock      flask1
+flask-2      flask   /flask-2/    /run/flask-2/gunicorn.sock      flask2
+flask-3      flask   /flask-3/    /run/flask-3/gunicorn.sock      flask3
+flask-4      flask   /flask-4/    /run/flask-4/gunicorn.sock      flask4
+node-1       node    /node-1/     127.0.0.1:8001                  node1
+node-2       node    /node-2/     127.0.0.1:8002                  node2
+rails        rails   /rails/      /run/rails/puma.sock            rails
